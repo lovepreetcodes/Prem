@@ -185,7 +185,7 @@ private fun latestWeightText(weights: List<WeightEntry>): String = weights.lastO
         else if(visible.size == 1) { Column(Modifier.fillMaxWidth().height(130.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.Center) { Text("%.2f kg".format(visible[0].kilograms), color=Green, fontSize=24.sp, fontWeight=FontWeight.Bold); Text("${visible[0].date} · Add more entries to build your trend", color=Muted, fontSize=10.sp) } }
         else {
             val values=visible.map { it.kilograms }; val min=values.minOrNull()!!; val max=values.maxOrNull()!!; val range=(max-min).coerceAtLeast(0.5)
-            Canvas(Modifier.fillMaxWidth().height(150.dp).pointerInput(visible) { detectTapGestures { tap -> val x=tap.x.coerceIn(0f,size.width); selectedIndex=((x/size.width)*(visible.size-1)).toInt().coerceIn(0,visible.lastIndex) } }) {
+            Canvas(Modifier.fillMaxWidth().height(150.dp).pointerInput(visible) { detectTapGestures { tap -> val x=tap.x.coerceIn(0f,size.width.toFloat()); selectedIndex=((x/size.width)*(visible.size-1)).toInt().coerceIn(0,visible.lastIndex) } }) {
                 val points=values.mapIndexed { i,v -> Offset(size.width*i/(values.size-1), size.height-14f-((v-min)/range).toFloat()*(size.height-28f)) }
                 for(row in 0..2) { val y=size.height*row/2f; drawLine(Color(0xFF293235), Offset(0f,y), Offset(size.width,y), 1.dp.toPx()) }
                 if(targetWeight != null && targetWeight in min..max) { val ty=size.height-14f-((targetWeight-min)/range).toFloat()*(size.height-28f); drawLine(Blue.copy(alpha=.8f), Offset(0f,ty), Offset(size.width,ty), 1.dp.toPx(), pathEffect=PathEffect.dashPathEffect(floatArrayOf(7f,6f))) }
