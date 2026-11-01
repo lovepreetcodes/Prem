@@ -3,6 +3,8 @@ package com.prem.daybyday.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -38,13 +40,14 @@ private val Muted = Color(0xFF929B9E)
 @Composable
 fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weights: List<WeightEntry>, steps: Long,
                healthConnected: Boolean, healthMessage: String, onConnectHealth: ()->Unit, onRefreshSteps: ()->Unit,
-               onSaveWeight: (LocalDate,Double)->Unit, onDeleteWeight: (LocalDate)->Unit, goalWeight: Double?, goalStartWeight: Double?, onSaveGoal: (Double)->Unit, onOpenWorkout: ()->Unit) {
+               onSaveWeight: (LocalDate,Double)->Unit, onDeleteWeight: (LocalDate)->Unit, goalWeight: Double?, goalStartWeight: Double?, onSaveGoal: (Double, Double)->Unit, onOpenWorkout: ()->Unit) {
     var month by remember { mutableStateOf(YearMonth.now()) }
     var calendarExpanded by remember { mutableStateOf(false) }
     var showWeightDialog by remember { mutableStateOf(false) }
     var weightText by remember { mutableStateOf("") }
     var showGoalDialog by remember { mutableStateOf(false) }
     var goalText by remember { mutableStateOf(goalWeight?.toString() ?: "") }
+    var startWeightText by remember { mutableStateOf(goalStartWeight?.toString() ?: latestWeightText(weights)) }
     val latest = weights.lastOrNull()?.kilograms
     val selectedWeight = weights.firstOrNull { it.date == selectedDate.toString() }?.kilograms
     MaterialTheme(colorScheme = darkColorScheme(background=Bg, surface=Panel, primary=Green, secondary=Blue, onBackground=Color.White, onSurface=Color.White)) {
@@ -97,11 +100,12 @@ fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weigh
                     Text(if(calendarExpanded) "Collapse calendar" else "Expand calendar", color=Blue, fontSize=11.sp)
                 }
                 Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-                    StatCard(Modifier.weight(1f), "${if(selectedDate==LocalDate.now()) "TODAY'S STEPS" else "SELECTED DAY"}", steps.toString(), "Samsung Health", Green, Icons.Default.DirectionsWalk)
+                Row(horizontalArrangement=Arrangement.spacedBy(10.dp), modifier=Modifier.fillMaxWidth()) {
+                    StatCard(Modifier.weight(1f), if(selectedDate==LocalDate.now()) "TODAY'S STEPS" else "SELECTED DAY", steps.toString(), "Samsung Health", Green, Icons.Default.DirectionsWalk)
                     StatCard(Modifier.weight(1f), "CURRENT WEIGHT", latest?.let { "%.1f kg".format(it) } ?: "—", "Last recorded", Blue, Icons.Default.MonitorWeight)
-                    GoalProgressCard(Modifier.weight(1f), latest, goalWeight, goalStartWeight, onClick = { goalText = goalWeight?.toString() ?: ""; showGoalDialog = true })
                 }
+                Spacer(Modifier.height(10.dp))
+                GoalProgressCard(Modifier.fillMaxWidth(), latest, goalWeight, goalStartWeight, onClick = { goalText = goalWeight?.toString() ?: ""; startWeightText = goalStartWeight?.toString() ?: latest?.toString().orEmpty(); showGoalDialog = true })
                 Row(Modifier.fillMaxWidth().padding(top=10.dp), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
                     Text(if(healthConnected) "● Health Connect connected" else "○ Steps not connected", color=if(healthConnected) Green else Muted, fontSize=11.sp)
                     TextButton(onClick=if(healthConnected) onRefreshSteps else onConnectHealth) { Text(if(healthConnected) "Refresh" else "Connect", color=Green) }
@@ -115,7 +119,7 @@ fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weigh
                 Spacer(Modifier.height(8.dp))
                 WeightTrendSummary(weights)
                 Spacer(Modifier.height(8.dp))
-                WeightChart(weights)
+                WeightChart(weights, goalWeight)
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
                     Column { Text(selectedDate.format(DateTimeFormatter.ofPattern("EEE, d MMM")), color=Color.White, fontWeight=FontWeight.SemiBold); Text(selectedWeight?.let { "Recorded: %.1f kg".format(it) } ?: "No weight recorded for this date", color=Muted, fontSize=12.sp) }
@@ -126,27 +130,32 @@ fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weigh
             }
         }
     }
-    if(showGoalDialog) AlertDialog(onDismissRequest={showGoalDialog=false}, containerColor=Panel, title={Text("Set goal weight")}, text={OutlinedTextField(value=goalText,onValueChange={goalText=it},label={Text("Target weight in kg")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true)}, confirmButton={TextButton(onClick={goalText.toDoubleOrNull()?.takeIf { it in 25.0..350.0 }?.let { onSaveGoal(it); showGoalDialog=false }}) {Text("Save",color=Green)}}, dismissButton={TextButton(onClick={showGoalDialog=false}) {Text("Cancel")}})
+    if(showGoalDialog) AlertDialog(onDismissRequest={showGoalDialog=false}, containerColor=Panel, title={Text("Set weight goal")}, text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)) { OutlinedTextField(value=startWeightText,onValueChange={startWeightText=it},label={Text("Starting weight (kg)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true); OutlinedTextField(value=goalText,onValueChange={goalText=it},label={Text("Target weight (kg)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true); Text("Starting weight is saved separately and won't change when you log today's weight.", color=Muted, fontSize=11.sp) }}, confirmButton={TextButton(onClick={ val start=startWeightText.toDoubleOrNull(); val target=goalText.toDoubleOrNull(); if(start!=null && target!=null && start in 25.0..350.0 && target in 25.0..350.0 && start!=target) { onSaveGoal(start,target); showGoalDialog=false } }) {Text("Save",color=Green)}}, dismissButton={TextButton(onClick={showGoalDialog=false}) {Text("Cancel")}})
     if(showWeightDialog) AlertDialog(onDismissRequest={showWeightDialog=false}, containerColor=Panel, title={Text("Log weight")}, text={ OutlinedTextField(value=weightText,onValueChange={weightText=it},label={Text("Weight in kg")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true) }, confirmButton={ TextButton(onClick={weightText.toDoubleOrNull()?.takeIf { it in 25.0..350.0 }?.let { onSaveWeight(selectedDate,it); showWeightDialog=false } }) { Text("Save", color=Green) } }, dismissButton={TextButton(onClick={showWeightDialog=false}) { Text("Cancel") } })
 }
 
 @Composable private fun GoalProgressCard(modifier: Modifier, current: Double?, target: Double?, start: Double?, onClick: () -> Unit) {
-    val progress = if (current != null && target != null && start != null && start > target) ((start-current)/(start-target)).coerceIn(0.0,1.0).toFloat() else if (current != null && target != null && current <= target) 1f else 0f
-    Column(modifier.background(Panel, RoundedCornerShape(18.dp)).clickable(onClick=onClick).padding(12.dp)) {
-        Icon(Icons.Default.Flag, null, tint=Green, modifier=Modifier.size(18.dp)); Spacer(Modifier.height(4.dp))
-        Text("GOAL PROGRESS", color=Muted, fontSize=8.sp, letterSpacing=0.7.sp)
-        Box(Modifier.fillMaxWidth().height(54.dp), contentAlignment=Alignment.Center) {
-            Canvas(Modifier.size(52.dp)) { drawArc(Color(0xFF30383A), -90f, 360f, false, style=androidx.compose.ui.graphics.drawscope.Stroke(5.dp.toPx())); drawArc(Green, -90f, 360f * progress, false, style=androidx.compose.ui.graphics.drawscope.Stroke(5.dp.toPx(), cap=StrokeCap.Round)) }
-            Text("${(progress*100).toInt()}%", color=Color.White, fontSize=11.sp, fontWeight=FontWeight.Bold)
+    val progress = if (current != null && target != null && start != null && start != target) ((start-current)/(start-target)).coerceIn(0.0,1.0).toFloat() else 0f
+    val remaining = if(current!=null && target!=null) kotlin.math.abs(current-target) else null
+    Row(modifier.fillMaxWidth().background(Panel, RoundedCornerShape(18.dp)).clickable(onClick=onClick).padding(16.dp), verticalAlignment=Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement=Arrangement.spacedBy(5.dp)) {
+            Row(verticalAlignment=Alignment.CenterVertically) { Icon(Icons.Default.Flag, null, tint=Green, modifier=Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("GOAL PROGRESS", color=Muted, fontSize=10.sp, letterSpacing=1.sp) }
+            Text(target?.let { "Target %.1f kg".format(it) } ?: "Set your weight goal", color=Color.White, fontSize=17.sp, fontWeight=FontWeight.Bold)
+            Text(if(start!=null && current!=null) "Start %.1f  ·  Now %.1f kg".format(start,current) else "Add a starting weight to track progress", color=Muted, fontSize=11.sp)
+            Text(remaining?.let { if(current!! >= target!!) "%.2f kg to go".format(it) else "%.2f kg below target".format(it) } ?: "Tap to configure", color=Green, fontSize=12.sp, fontWeight=FontWeight.SemiBold)
         }
-        Text(target?.let { "Target %.1f".format(it) } ?: "Set goal", color=Color.White, fontSize=13.sp, fontWeight=FontWeight.Bold, maxLines=1)
-        Text(if(current!=null && target!=null) "%.2f kg left".format((current-target).coerceAtLeast(0.0)) else "Tap to set", color=Green, fontSize=9.sp)
+        Box(Modifier.size(68.dp), contentAlignment=Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) { drawArc(Color(0xFF30383A), -90f, 360f, false, style=androidx.compose.ui.graphics.drawscope.Stroke(6.dp.toPx())); drawArc(Green, -90f, 360f*progress, false, style=androidx.compose.ui.graphics.drawscope.Stroke(6.dp.toPx(), cap=StrokeCap.Round)) }
+            Text("${(progress*100).toInt()}%", color=Color.White, fontSize=15.sp, fontWeight=FontWeight.Bold)
+        }
     }
 }
 
+private fun latestWeightText(weights: List<WeightEntry>): String = weights.lastOrNull()?.kilograms?.toString().orEmpty()
+
 @Composable private fun StatCard(modifier: Modifier, label:String, value:String, subtitle:String, accent:Color, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Column(modifier.background(Panel, RoundedCornerShape(18.dp)).padding(14.dp)) {
-        Icon(icon, null, tint=accent, modifier=Modifier.size(22.dp)); Spacer(Modifier.height(12.dp)); Text(label, color=Muted, fontSize=9.sp, letterSpacing=1.sp); Text(value, color=Color.White, fontSize=22.sp, fontWeight=FontWeight.Bold, maxLines=1); Text(subtitle, color=accent, fontSize=10.sp)
+    Column(modifier.heightIn(min=132.dp).background(Panel, RoundedCornerShape(18.dp)).padding(14.dp), verticalArrangement=Arrangement.spacedBy(7.dp)) {
+        Icon(icon, null, tint=accent, modifier=Modifier.size(22.dp)); Text(label, color=Muted, fontSize=9.sp, letterSpacing=0.8.sp, maxLines=1); Text(value, color=Color.White, fontSize=22.sp, fontWeight=FontWeight.Bold, maxLines=1); Text(subtitle, color=accent, fontSize=10.sp, maxLines=1)
     }
 }
 
@@ -161,23 +170,33 @@ fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weigh
     }
 }
 
-@Composable private fun WeightChart(weights:List<WeightEntry>) {
+@Composable private fun WeightChart(weights:List<WeightEntry>, targetWeight: Double?) {
     var rangeDays by remember { mutableIntStateOf(30) }
+    var selectedIndex by remember { mutableIntStateOf(-1) }
     val cutoff = LocalDate.now().minusDays(rangeDays.toLong()).toString()
-    val visible = weights.filter { it.date >= cutoff }
+    val visible = weights.filter { it.date >= cutoff }.sortedBy { it.date }
+    LaunchedEffect(rangeDays, visible.size) { selectedIndex = -1 }
     Column(Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(18.dp)).padding(14.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.End) { listOf(7,30,90).forEach { days -> TextButton(onClick={rangeDays=days}, contentPadding=PaddingValues(horizontal=7.dp, vertical=0.dp)) { Text("${days}D", color=if(rangeDays==days) Green else Muted, fontSize=10.sp) } } }
-        if(visible.size < 2) { Box(Modifier.fillMaxWidth().height(118.dp), contentAlignment=Alignment.Center) { Text("Log at least two weights to see your trend", color=Muted, fontSize=12.sp) } }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
+            Text("WEIGHT HISTORY", color=Muted, fontSize=10.sp, letterSpacing=0.8.sp)
+            Row { listOf(7,30,90).forEach { days -> TextButton(onClick={rangeDays=days}, contentPadding=PaddingValues(horizontal=7.dp, vertical=0.dp)) { Text("${days}D", color=if(rangeDays==days) Green else Muted, fontSize=10.sp) } } }
+        }
+        if(visible.isEmpty()) { Box(Modifier.fillMaxWidth().height(130.dp), contentAlignment=Alignment.Center) { Text("No entries in this period", color=Muted, fontSize=12.sp) } }
+        else if(visible.size == 1) { Column(Modifier.fillMaxWidth().height(130.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.Center) { Text("%.2f kg".format(visible[0].kilograms), color=Green, fontSize=24.sp, fontWeight=FontWeight.Bold); Text("${visible[0].date} · Add more entries to build your trend", color=Muted, fontSize=10.sp) } }
         else {
             val values=visible.map { it.kilograms }; val min=values.minOrNull()!!; val max=values.maxOrNull()!!; val range=(max-min).coerceAtLeast(0.5)
-            Canvas(Modifier.fillMaxWidth().height(118.dp)) {
-                val points=values.mapIndexed { i,v -> Offset(if(values.size==1) 0f else size.width*i/(values.size-1), size.height-12f-((v-min)/range).toFloat()*(size.height-24f)) }
+            Canvas(Modifier.fillMaxWidth().height(150.dp).pointerInput(visible) { detectTapGestures { tap -> val x=tap.x.coerceIn(0f,size.width); selectedIndex=((x/size.width)*(visible.size-1)).toInt().coerceIn(0,visible.lastIndex) } }) {
+                val points=values.mapIndexed { i,v -> Offset(size.width*i/(values.size-1), size.height-14f-((v-min)/range).toFloat()*(size.height-28f)) }
                 for(row in 0..2) { val y=size.height*row/2f; drawLine(Color(0xFF293235), Offset(0f,y), Offset(size.width,y), 1.dp.toPx()) }
-                val path=Path().apply { points.forEachIndexed { i,p -> if(i==0) moveTo(p.x,p.y) else lineTo(p.x,p.y) } }
-                drawPath(path, Green, style=androidx.compose.ui.graphics.drawscope.Stroke(width=3.dp.toPx(), cap=StrokeCap.Round))
-                points.lastOrNull()?.let { drawCircle(Green, 4.dp.toPx(), it) }
+                if(targetWeight != null && targetWeight in min..max) { val ty=size.height-14f-((targetWeight-min)/range).toFloat()*(size.height-28f); drawLine(Blue.copy(alpha=.8f), Offset(0f,ty), Offset(size.width,ty), 1.dp.toPx(), pathEffect=PathEffect.dashPathEffect(floatArrayOf(7f,6f))) }
+                val line=Path().apply { points.forEachIndexed { i,p -> if(i==0) moveTo(p.x,p.y) else lineTo(p.x,p.y) } }
+                val fill=Path().apply { moveTo(points.first().x,size.height); points.forEach { lineTo(it.x,it.y) }; lineTo(points.last().x,size.height); close() }
+                drawPath(fill, Brush.verticalGradient(listOf(Green.copy(alpha=.20f), Green.copy(alpha=.01f))))
+                drawPath(line, Green, style=androidx.compose.ui.graphics.drawscope.Stroke(width=2.dp.toPx(), cap=StrokeCap.Round))
+                points.forEachIndexed { i,p -> drawCircle(if(i==selectedIndex) Color.White else Green, if(i==selectedIndex) 5.dp.toPx() else 3.dp.toPx(), p) }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween) { Text("%.1f kg".format(max), color=Muted, fontSize=10.sp); Text("%.1f kg".format(min), color=Muted, fontSize=10.sp) }
+            if(selectedIndex in visible.indices) { val item=visible[selectedIndex]; Text("${item.date}   ·   %.2f kg".format(item.kilograms), color=Color.White, fontSize=12.sp, fontWeight=FontWeight.SemiBold, modifier=Modifier.padding(top=5.dp)) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween) { Text(visible.first().date, color=Muted, fontSize=9.sp); Text(visible.last().date, color=Muted, fontSize=9.sp) }
         }
     }
 }

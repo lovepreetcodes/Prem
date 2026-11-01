@@ -6,6 +6,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.health.connect.client.PermissionController
 import androidx.compose.runtime.*
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.lifecycle.lifecycleScope
 import com.prem.daybyday.data.*
 import com.prem.daybyday.health.HealthConnectSteps
@@ -40,8 +45,12 @@ class MainActivity : ComponentActivity() {
                     .onFailure { healthMessage = "Health Connect is not ready. Check its permissions and Samsung Health sync." }
             }
             LaunchedEffect(showWorkout, sessions) { if (showWorkout) { val all = mutableListOf<WorkoutSet>(); for (session in sessions) all.addAll(db.workoutDao().setsForSession(session.id)); workoutHistory = all } }
+            Box(Modifier.fillMaxSize().pointerInput(showWorkout) {
+                var drag = 0f
+                detectHorizontalDragGestures(onHorizontalDrag = { _, amount -> drag += amount }, onDragEnd = { if (drag < -65f) showWorkout = true else if (drag > 65f) showWorkout = false; drag = 0f })
+            }) {
             if (showWorkout) {
-                WorkoutScreen(onBack = { showWorkout = false }, onSave = { type, sets -> scope.launch { db.workoutDao().saveWorkout(WorkoutSession(date = LocalDate.now().toString(), workoutType = type), sets); val all = mutableListOf<WorkoutSet>(); for (session in sessions) all.addAll(db.workoutDao().setsForSession(session.id)); workoutHistory = all; showWorkout = false } }, history = workoutHistory, sessionsCount = sessions.size)
+                WorkoutScreen(onBack = { showWorkout = false }, onSave = { type, sets -> scope.launch { db.workoutDao().saveWorkout(WorkoutSession(date = LocalDate.now().toString(), workoutType = type), sets); val all = mutableListOf<WorkoutSet>(); for (session in sessions) all.addAll(db.workoutDao().setsForSession(session.id)); workoutHistory = all; showWorkout = false } }, history = workoutHistory, sessionsCount = sessions.size, sessionTypes = sessions.associate { it.id to it.workoutType })
             } else {
                 PremScreen(
                     selectedDate = selectedDate, onDateSelected = { selectedDate = it }, weights = weights, steps = steps,
@@ -52,9 +61,10 @@ class MainActivity : ComponentActivity() {
                     onDeleteWeight = { date -> scope.launch { db.weightDao().delete(date.toString()) } },
                     goalWeight = goal?.targetWeightKg,
                     goalStartWeight = goal?.startWeightKg,
-                    onSaveGoal = { target -> scope.launch { val baseline = weights.lastOrNull()?.kilograms ?: target; db.goalDao().save(UserGoal(targetWeightKg = target, startWeightKg = baseline)) } },
+                    onSaveGoal = { start, target -> scope.launch { db.goalDao().save(UserGoal(targetWeightKg = target, startWeightKg = start)) } },
                     onOpenWorkout = { showWorkout = true }
                 )
+            }
             }
         }
     }

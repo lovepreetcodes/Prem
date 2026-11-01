@@ -34,7 +34,7 @@ private val upper = listOf("Flat Bench Press", "Incline Bench Press", "Cable Fly
 private val lower = listOf("Leg Extensions", "Hack Squat", "Lunges", "Hip Abductor", "Standing Cable Calf Raises", "Cable Crunches")
 
 @Composable
-fun WorkoutScreen(onBack: () -> Unit, onSave: (String, List<WorkoutSet>) -> Unit, history: List<WorkoutSet>, sessionsCount: Int) {
+fun WorkoutScreen(onBack: () -> Unit, onSave: (String, List<WorkoutSet>) -> Unit, history: List<WorkoutSet>, sessionsCount: Int, sessionTypes: Map<Long, String>) {
     var type by remember { mutableStateOf("Upper") }
     var selectedExercise by remember { mutableStateOf<String?>(null) }
     val exercises = if (type == "Upper") upper else lower
@@ -54,6 +54,11 @@ fun WorkoutScreen(onBack: () -> Unit, onSave: (String, List<WorkoutSet>) -> Unit
             }
             Spacer(Modifier.height(14.dp))
             if (selectedExercise == null) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    WorkoutTypeTrend("UPPER BODY", history.filter { sessionTypes[it.sessionId] == "Upper" }, Modifier.weight(1f))
+                    WorkoutTypeTrend("LOWER BODY", history.filter { sessionTypes[it.sessionId] == "Lower" }, Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(14.dp))
                 Text("Choose your workout", color = WMuted, fontSize = 12.sp)
                 Spacer(Modifier.height(8.dp))
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -83,9 +88,21 @@ fun WorkoutScreen(onBack: () -> Unit, onSave: (String, List<WorkoutSet>) -> Unit
                 }
                 latestByExercise[ex]?.maxByOrNull { it.id }?.let { Text("Last logged: ${it.weightKg} kg × ${it.reps}", color = WMuted, fontSize = 11.sp) }
                 ExerciseProgress(ex, history.filter { it.exerciseName == ex })
-                Button(onClick = { selectedExercise = null }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = WGreen, contentColor = WBg)) { Text("Save exercise entries") }
+                Button(onClick = { selectedExercise = null }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = WGreen, contentColor = WBg)) { Text("Done · Return to exercises") }
+                Text("Your entries are saved when you tap Save completed workout.", color = WMuted, fontSize = 10.sp)
             }
         }
+    }
+}
+
+@Composable
+private fun WorkoutTypeTrend(title: String, records: List<WorkoutSet>, modifier: Modifier = Modifier) {
+    val trend = records.groupBy { it.sessionId }.toSortedMap().values.mapNotNull { sets -> sets.maxOfOrNull { it.weightKg }?.toFloat() }
+    Column(modifier.background(WPanel, RoundedCornerShape(14.dp)).padding(10.dp)) {
+        Text(title, color = WMuted, fontSize = 9.sp, letterSpacing = .7.sp, maxLines = 1)
+        Text(if (trend.isNotEmpty()) "%.1f kg best set".format(trend.last()) else "No data yet", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 5.dp))
+        MiniTrend(trend, WGreen)
+        Text("${trend.size} sessions", color = WMuted, fontSize = 9.sp)
     }
 }
 
