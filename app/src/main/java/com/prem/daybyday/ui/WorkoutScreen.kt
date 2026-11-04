@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,9 +56,9 @@ fun WorkoutScreen(onBack: () -> Unit, onSave: (String, List<WorkoutSet>) -> Unit
             }
             Spacer(Modifier.height(14.dp))
             if (selectedExercise == null) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    WorkoutTypeTrend("UPPER BODY", history.filter { sessionTypes[it.sessionId] == "Upper" }, Modifier.weight(1f))
-                    WorkoutTypeTrend("LOWER BODY", history.filter { sessionTypes[it.sessionId] == "Lower" }, Modifier.weight(1f))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    WorkoutTypeTrend("UPPER BODY", history.filter { sessionTypes[it.sessionId] == "Upper" })
+                    WorkoutTypeTrend("LOWER BODY", history.filter { sessionTypes[it.sessionId] == "Lower" })
                 }
                 Spacer(Modifier.height(14.dp))
                 Text("Choose your workout", color = WMuted, fontSize = 12.sp)
@@ -73,23 +75,31 @@ fun WorkoutScreen(onBack: () -> Unit, onSave: (String, List<WorkoutSet>) -> Unit
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = { val all = exercises.flatMap { ex -> values[ex].orEmpty().mapIndexedNotNull { i, pair -> val kg = pair.first.toDoubleOrNull(); val reps = pair.second.toIntOrNull(); if (kg != null && reps != null && kg >= 0 && reps > 0) WorkoutSet(sessionId = 0, exerciseName = ex, setNumber = i + 1, weightKg = kg, reps = reps) else null } }; if (all.isNotEmpty()) onSave(type, all) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = WGreen, contentColor = WBg)) { Icon(Icons.Default.Check, null); Spacer(Modifier.width(8.dp)); Text("Save completed workout") }
             } else {
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                 val ex = selectedExercise!!
                 Row(verticalAlignment = Alignment.CenterVertically) { Text(ex, Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 19.sp); TextButton(onClick = { selectedExercise = null }) { Text("Done", color = WGreen) } }
                 Text("Enter your working weight and reps for each set.", color = WMuted, fontSize = 12.sp)
                 Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("SET", color = WMuted, fontSize = 10.sp); Text("WEIGHT (KG)", color = WMuted, fontSize = 10.sp); Text("REPS", color = WMuted, fontSize = 10.sp) }
-                repeat(3) { i ->
-                    val current = values[ex]?.get(i) ?: ("" to "")
-                    Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("${i + 1}", Modifier.width(24.dp), color = WGreen, fontWeight = FontWeight.Bold)
+                val currentSets = values[ex].orEmpty()
+                currentSets.forEachIndexed { i, current ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Text("${i + 1}", Modifier.width(22.dp), color = WGreen, fontWeight = FontWeight.Bold)
                         OutlinedTextField(value = current.first, onValueChange = { v -> values[ex] = values[ex].orEmpty().toMutableList().also { it[i] = v to current.second } }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), placeholder = { Text("kg") })
                         OutlinedTextField(value = current.second, onValueChange = { v -> values[ex] = values[ex].orEmpty().toMutableList().also { it[i] = current.first to v } }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), placeholder = { Text("reps") })
+                        TextButton(onClick = { if (values[ex].orEmpty().size > 1) values[ex] = values[ex].orEmpty().toMutableList().also { it.removeAt(i) } }, contentPadding = PaddingValues(horizontal = 2.dp)) { Text("×", color = WMuted, fontSize = 18.sp) }
                     }
                 }
+                OutlinedButton(
+                    onClick = { if (values[ex].orEmpty().size < 20) values[ex] = values[ex].orEmpty() + ("" to "") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = values[ex].orEmpty().size < 20
+                ) { Text("+ Add set", color = WGreen) }
                 latestByExercise[ex]?.maxByOrNull { it.id }?.let { Text("Last logged: ${it.weightKg} kg × ${it.reps}", color = WMuted, fontSize = 11.sp) }
                 ExerciseProgress(ex, history.filter { it.exerciseName == ex })
                 Button(onClick = { selectedExercise = null }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = WGreen, contentColor = WBg)) { Text("Done · Return to exercises") }
                 Text("Your entries are saved when you tap Save completed workout.", color = WMuted, fontSize = 10.sp)
+                }
             }
         }
     }
@@ -98,11 +108,11 @@ fun WorkoutScreen(onBack: () -> Unit, onSave: (String, List<WorkoutSet>) -> Unit
 @Composable
 private fun WorkoutTypeTrend(title: String, records: List<WorkoutSet>, modifier: Modifier = Modifier) {
     val trend = records.groupBy { it.sessionId }.toSortedMap().values.mapNotNull { sets -> sets.maxOfOrNull { it.weightKg }?.toFloat() }
-    Column(modifier.background(WPanel, RoundedCornerShape(14.dp)).padding(10.dp)) {
-        Text(title, color = WMuted, fontSize = 9.sp, letterSpacing = .7.sp, maxLines = 1)
-        Text(if (trend.isNotEmpty()) "%.1f kg best set".format(trend.last()) else "No data yet", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 5.dp))
-        MiniTrend(trend, WGreen)
-        Text("${trend.size} sessions", color = WMuted, fontSize = 9.sp)
+    Column(Modifier.fillMaxWidth().background(WPanel, RoundedCornerShape(16.dp)).padding(14.dp)) {
+        Text(title, color = WMuted, fontSize = 10.sp, letterSpacing = .8.sp)
+        Text(if (trend.isNotEmpty()) "%.1f kg best set".format(trend.last()) else "No data yet", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 5.dp))
+        MiniTrend(trend, WGreen, height = 88)
+        Text("${trend.size} sessions", color = WMuted, fontSize = 10.sp)
     }
 }
 
@@ -114,9 +124,9 @@ private fun ExerciseProgress(name: String, records: List<WorkoutSet>) {
         if (recent.isEmpty()) Text("Your performance graph will appear after your first saved workout.", color = WMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
         else {
             Text("Weight lifted · kg", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
-            MiniTrend(recent.map { it.weightKg.toFloat() }, WGreen)
+            MiniTrend(recent.map { it.weightKg.toFloat() }, WGreen, height = 92)
             Text("Repetitions", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
-            MiniTrend(recent.map { it.reps.toFloat() }, Color(0xFF63AEFF))
+            MiniTrend(recent.map { it.reps.toFloat() }, Color(0xFF63AEFF), height = 92)
             val bestWeight = recent.maxOf { it.weightKg }; val bestReps = recent.maxOf { it.reps }
             Text("Best logged set: $bestWeight kg × $bestReps reps", color = WGreen, fontSize = 11.sp)
         }

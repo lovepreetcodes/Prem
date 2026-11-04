@@ -54,7 +54,7 @@ fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weigh
         Scaffold(containerColor=Bg) { pad ->
             Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(horizontal=18.dp)) {
                 Row(Modifier.fillMaxWidth().padding(top=18.dp,bottom=18.dp), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
-                    Column { Text("Prem.", fontSize=30.sp, fontWeight=FontWeight.Bold, color=Color.White); Text("YOUR DAILY PROGRESS", fontSize=10.sp, letterSpacing=2.sp, color=Muted) }
+                    Column { Row(verticalAlignment=Alignment.CenterVertically) { Text("locked", fontSize=30.sp, fontWeight=FontWeight.Bold, color=Color.White); Text("IN", fontSize=30.sp, fontWeight=FontWeight.Bold, color=Green) }; Text("YOUR DAILY PROGRESS", fontSize=10.sp, letterSpacing=2.sp, color=Muted) }
                     Row(verticalAlignment=Alignment.CenterVertically) { IconButton(onClick=onOpenWorkout) { Icon(Icons.Default.FitnessCenter, contentDescription="Workout", tint=Green) }; Icon(Icons.Default.Settings, contentDescription="Settings", tint=Muted) }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
@@ -137,7 +137,10 @@ fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weigh
 @Composable private fun GoalProgressCard(modifier: Modifier, current: Double?, target: Double?, start: Double?, onClick: () -> Unit) {
     val progress = if (current != null && target != null && start != null && start != target) ((start-current)/(start-target)).coerceIn(0.0,1.0).toFloat() else 0f
     val remaining = if(current!=null && target!=null) kotlin.math.abs(current-target) else null
-    Row(modifier.fillMaxWidth().background(Panel, RoundedCornerShape(18.dp)).clickable(onClick=onClick).padding(16.dp), verticalAlignment=Alignment.CenterVertically) {
+    Row(modifier.fillMaxWidth().background(
+        Brush.linearGradient(listOf(Color(0xFF173B31), Color(0xFF17252B), Panel)),
+        RoundedCornerShape(18.dp)
+    ).clickable(onClick=onClick).padding(16.dp), verticalAlignment=Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement=Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically) { Icon(Icons.Default.Flag, null, tint=Green, modifier=Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("GOAL PROGRESS", color=Muted, fontSize=10.sp, letterSpacing=1.sp) }
             Text(target?.let { "Target %.1f kg".format(it) } ?: "Set your weight goal", color=Color.White, fontSize=17.sp, fontWeight=FontWeight.Bold)
@@ -154,32 +157,61 @@ fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weigh
 private fun latestWeightText(weights: List<WeightEntry>): String = weights.lastOrNull()?.kilograms?.toString().orEmpty()
 
 @Composable private fun StatCard(modifier: Modifier, label:String, value:String, subtitle:String, accent:Color, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Column(modifier.heightIn(min=132.dp).background(Panel, RoundedCornerShape(18.dp)).padding(14.dp), verticalArrangement=Arrangement.spacedBy(7.dp)) {
+    Column(modifier.heightIn(min=132.dp).background(
+        Brush.linearGradient(listOf(accent.copy(alpha = 0.22f), Panel, Panel)),
+        RoundedCornerShape(18.dp)
+    ).padding(14.dp), verticalArrangement=Arrangement.spacedBy(7.dp)) {
         Icon(icon, null, tint=accent, modifier=Modifier.size(22.dp)); Text(label, color=Muted, fontSize=9.sp, letterSpacing=0.8.sp, maxLines=1); Text(value, color=Color.White, fontSize=22.sp, fontWeight=FontWeight.Bold, maxLines=1); Text(subtitle, color=accent, fontSize=10.sp, maxLines=1)
     }
 }
 
 @Composable private fun WeightTrendSummary(weights: List<WeightEntry>) {
-    val ordered = weights.sortedBy { it.date }
-    val recent = ordered.takeLast(7).map { it.kilograms }
-    val previous = ordered.dropLast(7).takeLast(7).map { it.kilograms }
-    val delta = if (recent.isNotEmpty() && previous.isNotEmpty()) recent.average() - previous.average() else null
-    Row(Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(14.dp)).padding(13.dp), horizontalArrangement=Arrangement.SpaceBetween) {
-        Column { Text("7-DAY WEIGHT TREND", color=Muted, fontSize=9.sp, letterSpacing=0.8.sp); Text(delta?.let { (if(it>0) "+" else "") + "%.2f kg vs prior week".format(it) } ?: "Need two weeks of entries", color=if(delta==null) Muted else if(delta<=0) Green else Color(0xFFFFB86B), fontSize=13.sp, fontWeight=FontWeight.SemiBold) }
-        Text(if(recent.isNotEmpty()) "Avg %.2f kg".format(recent.average()) else "—", color=Color.White, fontSize=13.sp)
+    // Compare the two most recent distinct weigh-in dates. No time-based drift is inferred.
+    val ordered = weights.sortedWith(compareBy<WeightEntry> { it.date }.thenBy { it.updatedAt })
+    val previous = ordered.getOrNull(ordered.lastIndex - 1)
+    val latest = ordered.lastOrNull()
+    val delta = if (latest != null && previous != null) latest.kilograms - previous.kilograms else null
+    val deltaLabel = when {
+        delta == null -> "Log another weigh-in to see your change"
+        kotlin.math.abs(delta) < 0.0001 -> "No change since previous entry"
+        delta < 0 -> "↓ %.2f kg since previous entry".format(kotlin.math.abs(delta))
+        else -> "↑ %.2f kg since previous entry".format(delta)
+    }
+    val trendColor = when {
+        delta == null -> Muted
+        delta < -0.0001 -> Green
+        delta > 0.0001 -> Color(0xFFFFB86B)
+        else -> Color.White
+    }
+    Row(
+        Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(14.dp)).padding(13.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("LATEST WEIGHT CHANGE", color=Muted, fontSize=9.sp, letterSpacing=0.8.sp)
+            Text(deltaLabel, color=trendColor, fontSize=13.sp, fontWeight=FontWeight.SemiBold)
+            if (previous != null && latest != null) {
+                Text("Previous: %.2f kg".format(previous.kilograms), color=Muted, fontSize=10.sp)
+            }
+        }
+        Column(horizontalAlignment=Alignment.End) {
+            Text(latest?.let { "%.2f kg".format(it.kilograms) } ?: "—", color=Color.White, fontSize=15.sp, fontWeight=FontWeight.Bold)
+            Text("Latest", color=Muted, fontSize=10.sp)
+        }
     }
 }
 
 @Composable private fun WeightChart(weights:List<WeightEntry>, targetWeight: Double?) {
-    var rangeDays by remember { mutableIntStateOf(30) }
+    var rangeDays by remember { mutableIntStateOf(7) }
     var selectedIndex by remember { mutableIntStateOf(-1) }
-    val cutoff = LocalDate.now().minusDays(rangeDays.toLong()).toString()
+    val cutoff = LocalDate.now().minusDays((rangeDays - 1).toLong()).toString()
     val visible = weights.filter { it.date >= cutoff }.sortedBy { it.date }
     LaunchedEffect(rangeDays, visible.size) { selectedIndex = -1 }
     Column(Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(18.dp)).padding(14.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
             Text("WEIGHT HISTORY", color=Muted, fontSize=10.sp, letterSpacing=0.8.sp)
-            Row { listOf(7,30,90).forEach { days -> TextButton(onClick={rangeDays=days}, contentPadding=PaddingValues(horizontal=7.dp, vertical=0.dp)) { Text("${days}D", color=if(rangeDays==days) Green else Muted, fontSize=10.sp) } } }
+            Row { listOf(3,7,15).forEach { days -> TextButton(onClick={rangeDays=days}, contentPadding=PaddingValues(horizontal=7.dp, vertical=0.dp)) { Text("${days}D", color=if(rangeDays==days) Green else Muted, fontSize=10.sp) } } }
         }
         if(visible.isEmpty()) { Box(Modifier.fillMaxWidth().height(130.dp), contentAlignment=Alignment.Center) { Text("No entries in this period", color=Muted, fontSize=12.sp) } }
         else if(visible.size == 1) { Column(Modifier.fillMaxWidth().height(130.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.Center) { Text("%.2f kg".format(visible[0].kilograms), color=Green, fontSize=24.sp, fontWeight=FontWeight.Bold); Text("${visible[0].date} · Add more entries to build your trend", color=Muted, fontSize=10.sp) } }

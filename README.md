@@ -1,4 +1,4 @@
-# Prem Android v1.2
+# lockedIN Android v1.2
 
 Native Kotlin + Jetpack Compose fitness tracker. This release builds on v1.1 and preserves the existing Room database and Health Connect integration.
 
