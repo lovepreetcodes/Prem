@@ -24,7 +24,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val db = WeightDatabase.get(this)
         val health = HealthConnectSteps(this)
+        val profilePrefs = getSharedPreferences("lockedin_profile", MODE_PRIVATE)
         setContent {
+            var displayName by remember { mutableStateOf(profilePrefs.getString("display_name", "") ?: "") }
             val weights by db.weightDao().observeAll().collectAsState(initial = emptyList())
             val goal by db.goalDao().observeGoal().collectAsState(initial = null)
             val sessions by db.workoutDao().observeSessions().collectAsState(initial = emptyList())
@@ -62,7 +64,9 @@ class MainActivity : ComponentActivity() {
                     goalWeight = goal?.targetWeightKg,
                     goalStartWeight = goal?.startWeightKg,
                     onSaveGoal = { start, target -> scope.launch { db.goalDao().save(UserGoal(targetWeightKg = target, startWeightKg = start)) } },
-                    onOpenWorkout = { showWorkout = true }
+                    onOpenWorkout = { showWorkout = true },
+                    displayName = displayName,
+                    onSaveName = { newName -> displayName = newName; profilePrefs.edit().putString("display_name", newName).apply() }
                 )
             }
             }

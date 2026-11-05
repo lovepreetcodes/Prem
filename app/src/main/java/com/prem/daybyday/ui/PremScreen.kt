@@ -33,19 +33,21 @@ import java.util.Locale
 
 private val Bg = Color(0xFF080A0B)
 private val Panel = Color(0xFF14191B)
-private val Green = Color(0xFF48D6A0)
-private val Blue = Color(0xFF63AEFF)
+private val Green = Color(0xFF3D8BFF) // tactical blue primary
+private val Blue = Color(0xFFFF963D) // warm orange secondary
 private val Muted = Color(0xFF929B9E)
 
 @Composable
 fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weights: List<WeightEntry>, steps: Long,
                healthConnected: Boolean, healthMessage: String, onConnectHealth: ()->Unit, onRefreshSteps: ()->Unit,
-               onSaveWeight: (LocalDate,Double)->Unit, onDeleteWeight: (LocalDate)->Unit, goalWeight: Double?, goalStartWeight: Double?, onSaveGoal: (Double, Double)->Unit, onOpenWorkout: ()->Unit) {
+               onSaveWeight: (LocalDate,Double)->Unit, onDeleteWeight: (LocalDate)->Unit, goalWeight: Double?, goalStartWeight: Double?, onSaveGoal: (Double, Double)->Unit, onOpenWorkout: ()->Unit, displayName: String, onSaveName: (String)->Unit) {
     var month by remember { mutableStateOf(YearMonth.now()) }
     var calendarExpanded by remember { mutableStateOf(false) }
     var showWeightDialog by remember { mutableStateOf(false) }
     var weightText by remember { mutableStateOf("") }
     var showGoalDialog by remember { mutableStateOf(false) }
+    var showNameDialog by remember { mutableStateOf(false) }
+    var nameText by remember(displayName) { mutableStateOf(displayName) }
     var goalText by remember { mutableStateOf(goalWeight?.toString() ?: "") }
     var startWeightText by remember { mutableStateOf(goalStartWeight?.toString() ?: latestWeightText(weights)) }
     val latest = weights.lastOrNull()?.kilograms
@@ -54,8 +56,8 @@ fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weigh
         Scaffold(containerColor=Bg) { pad ->
             Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(horizontal=18.dp)) {
                 Row(Modifier.fillMaxWidth().padding(top=18.dp,bottom=18.dp), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
-                    Column { Row(verticalAlignment=Alignment.CenterVertically) { Text("locked", fontSize=30.sp, fontWeight=FontWeight.Bold, color=Color.White); Text("IN", fontSize=30.sp, fontWeight=FontWeight.Bold, color=Green) }; Text("YOUR DAILY PROGRESS", fontSize=10.sp, letterSpacing=2.sp, color=Muted) }
-                    Row(verticalAlignment=Alignment.CenterVertically) { IconButton(onClick=onOpenWorkout) { Icon(Icons.Default.FitnessCenter, contentDescription="Workout", tint=Green) }; Icon(Icons.Default.Settings, contentDescription="Settings", tint=Muted) }
+                    Column(Modifier.clickable { nameText = displayName; showNameDialog = true }) { Text(if (displayName.isBlank()) "lockedIN" else "Hey, $displayName", fontSize=27.sp, fontWeight=FontWeight.Bold, color=Color.White); Text(if (displayName.isBlank()) "TAP TO SET YOUR NAME" else "YOUR DAILY PROGRESS", fontSize=10.sp, letterSpacing=1.6.sp, color=Muted) }
+                    IconButton(onClick=onOpenWorkout) { Icon(Icons.Default.FitnessCenter, contentDescription="Workout", tint=Green) }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween, verticalAlignment=Alignment.CenterVertically) {
                     Text(if (calendarExpanded) month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)) else selectedDate.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)), fontSize=18.sp, fontWeight=FontWeight.SemiBold)
@@ -84,7 +86,7 @@ fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weigh
                                 if (date != null) {
                                     val entry = weights.firstOrNull { it.date == date.toString() }
                                     Column(horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.Center,
-                                        modifier=Modifier.background(if(date==selectedDate) Color(0xFF1B4B3A) else Color.Transparent, RoundedCornerShape(10.dp)).padding(horizontal=5.dp, vertical=4.dp)) {
+                                        modifier=Modifier.background(if(date==selectedDate) Color(0xFF173A68) else Color.Transparent, RoundedCornerShape(10.dp)).padding(horizontal=5.dp, vertical=4.dp)) {
                                         Text(date.dayOfMonth.toString(), color=if(date==selectedDate) Color.White else Color(0xFFD7DEDF), fontSize=13.sp, fontWeight=if(date==LocalDate.now()) FontWeight.Bold else FontWeight.Normal)
                                         if (entry != null) Text("%.1f".format(entry.kilograms), color=Green, fontSize=8.sp, maxLines=1)
                                         else Box(Modifier.padding(top=2.dp).size(4.dp).background(Color.Transparent, CircleShape))
@@ -130,15 +132,25 @@ fun PremScreen(selectedDate: LocalDate, onDateSelected: (LocalDate)->Unit, weigh
             }
         }
     }
-    if(showGoalDialog) AlertDialog(onDismissRequest={showGoalDialog=false}, containerColor=Panel, title={Text("Set weight goal")}, text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)) { OutlinedTextField(value=startWeightText,onValueChange={startWeightText=it},label={Text("Starting weight (kg)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true); OutlinedTextField(value=goalText,onValueChange={goalText=it},label={Text("Target weight (kg)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true); Text("Starting weight is saved separately and won't change when you log today's weight.", color=Muted, fontSize=11.sp) }}, confirmButton={TextButton(onClick={ val start=startWeightText.toDoubleOrNull(); val target=goalText.toDoubleOrNull(); if(start!=null && target!=null && start in 25.0..350.0 && target in 25.0..350.0 && start!=target) { onSaveGoal(start,target); showGoalDialog=false } }) {Text("Save",color=Green)}}, dismissButton={TextButton(onClick={showGoalDialog=false}) {Text("Cancel")}})
-    if(showWeightDialog) AlertDialog(onDismissRequest={showWeightDialog=false}, containerColor=Panel, title={Text("Log weight")}, text={ OutlinedTextField(value=weightText,onValueChange={weightText=it},label={Text("Weight in kg")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true) }, confirmButton={ TextButton(onClick={weightText.toDoubleOrNull()?.takeIf { it in 25.0..350.0 }?.let { onSaveWeight(selectedDate,it); showWeightDialog=false } }) { Text("Save", color=Green) } }, dismissButton={TextButton(onClick={showWeightDialog=false}) { Text("Cancel") } })
+    val inputColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+        cursorColor = Green, focusedBorderColor = Green, unfocusedBorderColor = Color(0xFF536174),
+        focusedLabelColor = Green, unfocusedLabelColor = Muted,
+        focusedPlaceholderColor = Muted, unfocusedPlaceholderColor = Muted
+    )
+    if (showNameDialog) AlertDialog(onDismissRequest={showNameDialog=false}, containerColor=Panel, title={Text("Your name")},
+        text={OutlinedTextField(value=nameText, onValueChange={nameText=it.take(24)}, label={Text("Name")}, singleLine=true, colors=inputColors)},
+        confirmButton={TextButton(onClick={onSaveName(nameText.trim()); showNameDialog=false}) { Text("Save", color=Green) }},
+        dismissButton={TextButton(onClick={showNameDialog=false}) { Text("Cancel") }})
+    if(showGoalDialog) AlertDialog(onDismissRequest={showGoalDialog=false}, containerColor=Panel, title={Text("Set weight goal")}, text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)) { OutlinedTextField(value=startWeightText,onValueChange={startWeightText=it},label={Text("Starting weight (kg)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true, colors=inputColors); OutlinedTextField(value=goalText,onValueChange={goalText=it},label={Text("Target weight (kg)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true, colors=inputColors); Text("Starting weight is saved separately and won't change when you log today's weight.", color=Muted, fontSize=11.sp) }}, confirmButton={TextButton(onClick={ val start=startWeightText.toDoubleOrNull(); val target=goalText.toDoubleOrNull(); if(start!=null && target!=null && start in 25.0..350.0 && target in 25.0..350.0 && start!=target) { onSaveGoal(start,target); showGoalDialog=false } }) {Text("Save",color=Green)}}, dismissButton={TextButton(onClick={showGoalDialog=false}) {Text("Cancel")}})
+    if(showWeightDialog) AlertDialog(onDismissRequest={showWeightDialog=false}, containerColor=Panel, title={Text("Log weight")}, text={ OutlinedTextField(value=weightText,onValueChange={weightText=it},label={Text("Weight in kg")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true, colors=inputColors) }, confirmButton={ TextButton(onClick={weightText.toDoubleOrNull()?.takeIf { it in 25.0..350.0 }?.let { onSaveWeight(selectedDate,it); showWeightDialog=false } }) { Text("Save", color=Green) } }, dismissButton={TextButton(onClick={showWeightDialog=false}) { Text("Cancel") } })
 }
 
 @Composable private fun GoalProgressCard(modifier: Modifier, current: Double?, target: Double?, start: Double?, onClick: () -> Unit) {
     val progress = if (current != null && target != null && start != null && start != target) ((start-current)/(start-target)).coerceIn(0.0,1.0).toFloat() else 0f
     val remaining = if(current!=null && target!=null) kotlin.math.abs(current-target) else null
     Row(modifier.fillMaxWidth().background(
-        Brush.linearGradient(listOf(Color(0xFF173B31), Color(0xFF17252B), Panel)),
+        Brush.linearGradient(listOf(Color(0xFF173A68), Color(0xFF55301D), Panel)),
         RoundedCornerShape(18.dp)
     ).clickable(onClick=onClick).padding(16.dp), verticalAlignment=Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement=Arrangement.spacedBy(5.dp)) {

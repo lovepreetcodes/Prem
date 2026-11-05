@@ -31,3 +31,11 @@ The project requires JDK 17, Android SDK 36, and Gradle 8.11.1.
 - Existing Room migration and Health Connect integration are retained.
 
 Build validation: this source patch has not yet been compiled or installed on a device. Run the repository GitHub Actions workflow and test the resulting APK on the phone before treating it as a verified release.
+
+
+## lockedIN v2.1.0
+- Improved contrast and cursor visibility in all weight and workout text inputs.
+- Removed the unused settings icon and added a locally saved editable display name.
+- Reordered workout screen so exercise logging is immediately accessible; strength charts are compact and below the exercise list.
+- Applied a blue/orange accent palette, with blue for Upper Body and orange for Lower Body strength charts.
+- Preserves the existing Room database and Health Connect integration.
