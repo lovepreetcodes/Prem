@@ -134,8 +134,8 @@ private fun ExerciseProgress(name: String, records: List<WorkoutSet>) {
 }
 
 @Composable
-private fun MiniTrend(values: List<Float>, tint: Color) {
-    Canvas(Modifier.fillMaxWidth().height(54.dp).padding(vertical = 4.dp)) {
+private fun MiniTrend(values: List<Float>, tint: Color, height: Int = 54) {
+    Canvas(Modifier.fillMaxWidth().height(height.dp).padding(vertical = 4.dp)) {
         for (i in 0..2) { val y = size.height * i / 2f; drawLine(Color(0xFF30383A), Offset(0f, y), Offset(size.width, y), 1.dp.toPx()) }
         if (values.size >= 2) {
             val min = values.minOrNull()!!; val range = (values.maxOrNull()!! - min).coerceAtLeast(1f)
